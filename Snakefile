@@ -1,12 +1,23 @@
 import os
 import subprocess
+import pandas as pd
+
+# settings
+wildcard_constraints:
+    sampletype = 'TUMOR|NORMAL',
+
+PATIENTS = [s.strip() for s in open(config['patientlist']).readlines()]
+PATIENTS = [s for s in PATIENTS if not s.startswith('DO')]
+# PATIENTS.remove('DO46325') # bam not present
+# PATIENTS.remove('DO46327') # bam not present
+# PATIENTS.remove('DO46328') # bam not present
+# PATIENTS.remove('DO46329') # bam not present
+# PATIENTS.remove('DO46330') # bam not present
 
 if not os.path.exists(config['log_dir']): subprocess.run(f'mkdir -p {config["log_dir"]}', shell=True)
 if not os.path.exists(config['tmp_dir']): subprocess.run(f'mkdir -p {config["tmp_dir"]}', shell=True)
 if config['genome_version'] == 'hg19':
-    ref_fasta = "juno/work/shah/isabl_data_lake/assemblies/GRCh37/GRCh37-lite/GRCh37-lite.fa"
-
-PATIENTS = ['
+    ref_fasta = "/juno/work/shah/isabl_data_lake/assemblies/GRCh37/GRCh37-lite/GRCh37-lite.fa"
 
 def _fetch_bam_metadata(patient):
     meta = pd.read_table(config['metadata'])
@@ -30,8 +41,11 @@ def _get_tumor_bam(wildcards):
     path = paths[0]
     return path
 
+
+# rules
 rule all:
     input:
+        'results/intervals/genome.intervals',
         expand('results/bam/{patient}.NORMAL.bam.bai', patient=PATIENTS),
         expand('results/bam/{patient}.TUMOR.bam.bai', patient=PATIENTS),
 
@@ -45,8 +59,40 @@ rule symbolic_link:
         tumor_bam = 'results/bam/{patient}.TUMOR.bam',
         tumor_bai = 'results/bam/{patient}.TUMOR.bam.bai',
     shell:
-        'ln -s $(realpath {input.normal_bam}) $(realpath {output.normal_bam} && '
-        'ln -s $(realpath {input.normal_bai}.bai) $(realpath {output.normal_bai} && '
-        'ln -s $(realpath {input.tumor_bam}) $(realpath {output.tumor_bam} && '
-        'ln -s $(realpath {input.tumor_bai}.bai) $(realpath {output.tumor_bai}'
-        
+        'ln -s $(realpath {input.normal_bam}) $(realpath {output.normal_bam}) && '
+        'ln -s $(realpath {input.normal_bam}.bai) $(realpath {output.normal_bai}) && '
+        'ln -s $(realpath {input.tumor_bam}) $(realpath {output.tumor_bam}) && '
+        'ln -s $(realpath {input.tumor_bam}.bai) $(realpath {output.tumor_bai})'
+
+rule create_intervals:
+    input:
+        ref_fasta,
+    output:
+        intervals = 'results/intervals/genome.intervals',
+    run:
+        import wgs_analysis.refgenome as refgenome
+        refgenome.set_genome_version(config['genome_version'])
+        bin_size = 500000
+        assert refgenome.info.chromosome_lengths.shape[0] > 0
+        with open(output.intervals, 'w') as out:
+            for chrom, length in refgenome.info.chromosome_lengths.items():
+                for i in range(0, length, bin_size):
+                    start = i
+                    end = min(length, i + bin_size)
+                    out.write(f'{chrom}:{start}-{end}\n')
+
+rule depth_of_coverage:
+    input:
+        bam = 'results/bam/{patient}.{sampletype}.bam',
+        intervals = 'results/intervals/genome.intervals',
+    output:
+        doc = 'results/doc/{patient}.{sampletype}.bam_summary',
+    params:
+        prefix = lambda w: 'results/doc/{w.patient}.{w.sampletype}.bam',
+        ref = ref_fasta,
+    singularity:
+        '/juno/work/shah/users/chois7/singularity/sif/gatk4.sif',
+    shell:
+        'gatk DepthOfCoverage '
+        '-R {params.ref} -L {params.intervals} '
+        '-I {input.bam} -O {output.doc} '

@@ -1,0 +1,6 @@
+results/
+tmp/
+logs/
+resources/
+_*.sh
+.snakemake
