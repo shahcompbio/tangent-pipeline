@@ -1,0 +1,4 @@
+metadata: resources/paths.WGS-ALIGNMENT.tsv
+genome_version: "hg19"
+log_dir: logs
+tmp_dir: tmp
