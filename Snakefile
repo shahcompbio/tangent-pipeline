@@ -4,15 +4,18 @@ import pandas as pd
 
 # settings
 wildcard_constraints:
-    sampletype = 'TUMOR|NORMAL',
+    type = 'TUMOR|NORMAL',
 
 PATIENTS = [s.strip() for s in open(config['patientlist']).readlines()]
 PATIENTS = [s for s in PATIENTS if not s.startswith('DO')]
+# PATIENTS = PATIENTS[:1] ##@##
+# PATIENTS = PATIENTS[1:] ##@##
 # PATIENTS.remove('DO46325') # bam not present
 # PATIENTS.remove('DO46327') # bam not present
 # PATIENTS.remove('DO46328') # bam not present
 # PATIENTS.remove('DO46329') # bam not present
 # PATIENTS.remove('DO46330') # bam not present
+TYPES = ['TUMOR', 'NORMAL']
 
 if not os.path.exists(config['log_dir']): subprocess.run(f'mkdir -p {config["log_dir"]}', shell=True)
 if not os.path.exists(config['tmp_dir']): subprocess.run(f'mkdir -p {config["tmp_dir"]}', shell=True)
@@ -45,6 +48,7 @@ def _get_tumor_bam(wildcards):
 # rules
 rule all:
     input:
+        expand('results/doc/{patient}.{type}.bam_summary', patient=PATIENTS, type=TYPES,),
         'results/intervals/genome.intervals',
         expand('results/bam/{patient}.NORMAL.bam.bai', patient=PATIENTS),
         expand('results/bam/{patient}.TUMOR.bam.bai', patient=PATIENTS),
@@ -77,22 +81,23 @@ rule create_intervals:
         with open(output.intervals, 'w') as out:
             for chrom, length in refgenome.info.chromosome_lengths.items():
                 for i in range(0, length, bin_size):
-                    start = i
+                    start = i + 1
                     end = min(length, i + bin_size)
                     out.write(f'{chrom}:{start}-{end}\n')
 
 rule depth_of_coverage:
     input:
-        bam = 'results/bam/{patient}.{sampletype}.bam',
+        bam = 'results/bam/{patient}.{type}.bam',
         intervals = 'results/intervals/genome.intervals',
     output:
-        doc = 'results/doc/{patient}.{sampletype}.bam_summary',
+        doc = 'results/doc/{patient}.{type}.bam_summary',
     params:
-        prefix = lambda w: 'results/doc/{w.patient}.{w.sampletype}.bam',
+        prefix = lambda w: 'results/doc/{w.patient}.{w.type}.bam',
         ref = ref_fasta,
     singularity:
         '/juno/work/shah/users/chois7/singularity/sif/gatk4.sif',
     shell:
         'gatk DepthOfCoverage '
-        '-R {params.ref} -L {params.intervals} '
+        '-R {params.ref} -L {input.intervals} '
         '-I {input.bam} -O {output.doc} '
+        '--omit-depth-output-at-each-base true '
