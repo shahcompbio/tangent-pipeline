@@ -1,7 +1,7 @@
 __default__:
-    time: "40:00"
-    nCPUS: 4
-    memory: 4
+    time: "60:00"
+    nCPUS: 8
+    memory: 24
     name: "JOBNAME.{rule}.{wildcards}"
     output: "{config[log_dir]}/{rule}.{wildcards}.out"
     error:  "{config[log_dir]}/{rule}.{wildcards}.err"

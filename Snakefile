@@ -48,7 +48,7 @@ def _get_tumor_bam(wildcards):
 # rules
 rule all:
     input:
-        expand('results/doc/{patient}.{type}.bam_summary', patient=PATIENTS, type=TYPES,),
+        expand('results/doc/{patient}.{type}.bam_summary.sample_summary', patient=PATIENTS, type=TYPES,),
         'results/intervals/genome.intervals',
         expand('results/bam/{patient}.NORMAL.bam.bai', patient=PATIENTS),
         expand('results/bam/{patient}.TUMOR.bam.bai', patient=PATIENTS),
@@ -90,7 +90,12 @@ rule depth_of_coverage:
         bam = 'results/bam/{patient}.{type}.bam',
         intervals = 'results/intervals/genome.intervals',
     output:
-        doc = 'results/doc/{patient}.{type}.bam_summary',
+        doc = 'results/doc/{patient}.{type}.bam_summary.sample_summary',
+        cov_counts = 'results/doc/{patient}.{type}.bam_summary.sample_cumulative_coverage_counts',
+        int_summary = 'results/doc/{patient}.{type}.bam_summary.sample_interval_summary',
+        int_stats = 'results/doc/{patient}.{type}.bam_summary.sample_interval_statistics',
+        sample_stats = 'results/doc/{patient}.{type}.bam_summary.sample_statistics',
+        cov_proportions = 'results/doc/{patient}.{type}.bam_summary.sample_cumulative_coverage_proportions',
     params:
         prefix = lambda w: 'results/doc/{w.patient}.{w.type}.bam',
         ref = ref_fasta,
@@ -99,5 +104,5 @@ rule depth_of_coverage:
     shell:
         'gatk DepthOfCoverage '
         '-R {params.ref} -L {input.intervals} '
-        '-I {input.bam} -O {output.doc} '
+        '-I {input.bam} -O {params.prefix} '
         '--omit-depth-output-at-each-base true '
